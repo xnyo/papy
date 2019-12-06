@@ -67,19 +67,10 @@ var incrementalCmd = &cobra.Command{
 			go p.CompileWorker(Config, &wg, files, results)
 		}
 
-		// Error reporting goroutine
+		// Close results when done
 		go func() {
-			for result := range results {
-				if result.Err != nil {
-					fmt.Fprintf(
-						os.Stderr,
-						"Error while compiling %s:\n%v\n%s",
-						result.SourceScript,
-						result.Err,
-						result.Output,
-					)
-				}
-			}
+			wg.Wait()
+			close(results)
 		}()
 
 		// Send all files to workers
@@ -88,11 +79,21 @@ var incrementalCmd = &cobra.Command{
 		}
 		close(files)
 
-		// Wait for all workers to finish
-		wg.Wait()
+		// Print results
+		for result := range results {
+			if result.Err != nil {
+				fmt.Fprintf(
+					os.Stderr,
+					"Error while compiling %s:\n%v\n%s",
+					result.SourceScript,
+					result.Err,
+					result.Output,
+				)
+			}
+		}
 
 		// This will stop the error reporting goroutine
-		close(results)
+		// close(results)
 
 		VerbosePrintln("Done!")
 	},

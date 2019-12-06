@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/xnyo/papy/papyrus"
@@ -41,12 +42,6 @@ func buildDirSet(folder string, ext string) (*map[string]struct{}, error) {
 	return &pex, nil
 }
 
-func setEmptier(set *map[string]struct{}, remove <-chan string) {
-	for k := range remove {
-		delete(*set, k)
-	}
-}
-
 func walkWorker(folder string, ext string, remove chan<- string) error {
 	entries, err := dirents(folder)
 	if err != nil {
@@ -80,24 +75,35 @@ var unboundCmd = &cobra.Command{
 		if err != nil {
 			Fatal(err)
 		}
+		var wg sync.WaitGroup
 		workers := len(p.Folders)
-		done := make(chan struct{}, workers)
 		remove := make(chan string, workers)
-		go setEmptier(pexSet, remove)
+		wg.Add(workers)
+
+		// Goroutine that will close the remove channel
+		// to stop the "set emptier" in the main goroutine
+		go func() {
+			wg.Wait()
+			close(remove)
+		}()
+
 		for _, f := range p.Folders {
 			f := f
 			go func() {
+				defer wg.Done()
 				err := walkWorker(f, ".psc", remove)
 				if err != nil {
 					Fatal(err)
 				}
-				done <- struct{}{}
 			}()
 		}
-		for i := 0; i < workers; i++ {
-			<-done
+
+		// empty the set in main goroutine
+		for k := range remove {
+			delete(*pexSet, k)
 		}
-		close(remove)
+
+		// print what's left in the set
 		for k := range *pexSet {
 			fmt.Printf("%s.pex\n", k)
 		}
