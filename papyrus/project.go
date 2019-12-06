@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/xnyo/papy/config"
 	"gopkg.in/yaml.v2"
 )
 
@@ -47,7 +48,7 @@ type Project struct {
 
 // UnmarshalFile takes a path to a yaml file and tries
 // to unmarshal its content to a Project struct
-func UnmarshalFile(inputFileName string) (*Project, error) {
+func UnmarshalFile(inputFileName string, config *config.Configuration) (*Project, error) {
 	data, err := ioutil.ReadFile(inputFileName)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file %s: %v", inputFileName, err)
@@ -61,6 +62,7 @@ func UnmarshalFile(inputFileName string) (*Project, error) {
 	// Add source folder to -i imports or it won't compile anything related to
 	// any scripts in the same folder
 	newProject.addSourceToImports()
+	newProject.resolveSpecialPaths(config)
 
 	// Turn all paths to absolute paths
 	err = newProject.absPaths()
@@ -68,6 +70,16 @@ func UnmarshalFile(inputFileName string) (*Project, error) {
 		return nil, err
 	}
 	return &newProject, nil
+}
+
+// resolveSpecialPaths resolves all special paths
+// (right now, only $base_game in Imports)
+func (p *Project) resolveSpecialPaths(config *config.Configuration) {
+	for i, path := range p.Imports {
+		if path == "$base_game" {
+			p.Imports[i] = filepath.Join("", "Data", "Scripts")
+		}
+	}
 }
 
 // absPaths turns all relative paths to absolute paths
@@ -134,7 +146,7 @@ func (p *Project) GetScriptsToCompile() (*[]string, error) {
 // CompileWorker starts a papyrus compiler to compile
 // scripts received from the "c" channel.
 // It reports results in the "results" channel.
-func (p *Project) CompileWorker(compilerPath string, wg *sync.WaitGroup, c <-chan string, results chan<- *CompilerResult) {
+func (p *Project) CompileWorker(config config.Configuration, wg *sync.WaitGroup, c <-chan string, results chan<- *CompilerResult) {
 	defer wg.Done()
 	for sourceFile := range c {
 		fmt.Printf("Compiling %s\n", sourceFile)
@@ -150,7 +162,7 @@ func (p *Project) CompileWorker(compilerPath string, wg *sync.WaitGroup, c <-cha
 		if p.Optimize {
 			args = append(args, "-o")
 		}
-		compilerCmd := exec.Command(compilerPath, args...)
+		compilerCmd := exec.Command(config.CompilerPath, args...)
 		compilerOut, err := compilerCmd.CombinedOutput()
 		results <- &CompilerResult{
 			SourceScript: sourceFile,
@@ -171,6 +183,7 @@ func (p *Project) walkSourceDir(dir string) (*[]string, error) {
 		pscFileName := pscInfo.Name()
 		if pscInfo.IsDir() {
 			// Folder, walk recursively
+			// Skyrim has all scripts in one folder, so no.
 			/*subdir := filepath.Join(dir, pscInfo.Name())
 			subEntries, err := p.walkSourceDir(subdir)
 			if err != nil {

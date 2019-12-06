@@ -6,26 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/xnyo/papy/config"
 )
 
 // Verbose is true if and only if the -v flag is present
 var Verbose bool
 
 // Config is the global configuration file
-var Config Configuration
-
-// Configuration represents the global config file structure
-type Configuration struct {
-	// CompilerPath is the path to PapyrusCompiler.exe
-	CompilerPath string `mapstructure:"compiler_path"`
-
-	// GamePath is the path to the game root folder (where SkyrimSE.exe is)
-	GamePath string `mapstructure:"game_path"`
-}
-
-func (c Configuration) String() string {
-	return fmt.Sprintf("GamePath: %s\nCompilerPath: %s", c.GamePath, c.CompilerPath)
-}
+var Config config.Configuration
 
 func init() {
 	cobra.OnInitialize(initConfig)

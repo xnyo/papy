@@ -28,7 +28,7 @@ var incrementalCmd = &cobra.Command{
 		if len(args) >= 1 {
 			projectFile = args[0]
 		}
-		p, err := papyrus.UnmarshalFile(projectFile)
+		p, err := papyrus.UnmarshalFile(projectFile, &Config)
 		if err != nil {
 			Fatal(err)
 		}
@@ -64,7 +64,7 @@ var incrementalCmd = &cobra.Command{
 		var wg sync.WaitGroup
 		wg.Add(workers)
 		for i := 0; i < workers; i++ {
-			go p.CompileWorker(Config.CompilerPath, &wg, files, results)
+			go p.CompileWorker(Config, &wg, files, results)
 		}
 
 		// Error reporting goroutine
