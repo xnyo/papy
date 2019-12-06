@@ -99,7 +99,7 @@ var unboundCmd = &cobra.Command{
 		}
 		close(remove)
 		for k := range *pexSet {
-			fmt.Printf("%s.psc\n", k)
+			fmt.Printf("%s.pex\n", k)
 		}
 	},
 }
