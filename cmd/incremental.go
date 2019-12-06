@@ -68,13 +68,8 @@ var incrementalCmd = &cobra.Command{
 			go p.CompileWorker(Config, &wg, files, results)
 		}
 
-		// Close results when done
-		/*go func() {
-
-		}()*/
-		// Print results
+		// Results printer goroutine
 		go func() {
-			// defer wg.Done()
 			for result := range results {
 				if result.Err != nil {
 					fmt.Fprintf(
@@ -86,6 +81,8 @@ var incrementalCmd = &cobra.Command{
 					)
 				}
 			}
+
+			// Notify main goroutine all results have been printed
 			outputDone <- struct{}{}
 		}()
 
@@ -95,10 +92,14 @@ var incrementalCmd = &cobra.Command{
 		}
 		close(files)
 
+		// Wait for workers. No more results
 		wg.Wait()
 		close(results)
+
+		// Wait for last results
 		<-outputDone
 
+		// Terminate the program
 		VerbosePrintln("Done!")
 	},
 }
