@@ -13,7 +13,7 @@ Right now, Papy is only able to compile scripts. In the future, it'll be able to
 Get papy:
 
 ```bash
-go get -v -u http://github.com/xnyo/papy
+go get -v -u github.com/xnyo/papy
 ```
 
 (assuming `$GOPATH/bin` or `$GOBIN` is in your PATH)
