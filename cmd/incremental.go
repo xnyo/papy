@@ -61,6 +61,7 @@ var incrementalCmd = &cobra.Command{
 		// Spawn workers
 		files := make(chan string, workers)
 		results := make(chan *papyrus.CompilerResult, workers)
+		outputDone := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(workers)
 		for i := 0; i < workers; i++ {
@@ -68,9 +69,24 @@ var incrementalCmd = &cobra.Command{
 		}
 
 		// Close results when done
+		/*go func() {
+
+		}()*/
+		// Print results
 		go func() {
-			wg.Wait()
-			close(results)
+			// defer wg.Done()
+			for result := range results {
+				if result.Err != nil {
+					fmt.Fprintf(
+						os.Stderr,
+						"Error while compiling %s:\n%v\n%s",
+						result.SourceScript,
+						result.Err,
+						result.Output,
+					)
+				}
+			}
+			outputDone <- struct{}{}
 		}()
 
 		// Send all files to workers
@@ -79,21 +95,9 @@ var incrementalCmd = &cobra.Command{
 		}
 		close(files)
 
-		// Print results
-		for result := range results {
-			if result.Err != nil {
-				fmt.Fprintf(
-					os.Stderr,
-					"Error while compiling %s:\n%v\n%s",
-					result.SourceScript,
-					result.Err,
-					result.Output,
-				)
-			}
-		}
-
-		// This will stop the error reporting goroutine
-		// close(results)
+		wg.Wait()
+		close(results)
+		<-outputDone
 
 		VerbosePrintln("Done!")
 	},
