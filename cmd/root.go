@@ -42,7 +42,8 @@ var rootCmd = &cobra.Command{
 	Long: `A fast and modern packager and incremental compiler for Skyrim Special Edition mods.
 Built by the SkyVac team, for SkyVac.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Not supported yet. Only 'papy incremental' is supported at the moment.")
+		cmd.Help()
+		os.Exit(0)
 	},
 }
 
