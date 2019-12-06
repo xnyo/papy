@@ -62,7 +62,7 @@ func UnmarshalFile(inputFileName string, config *config.Configuration) (*Project
 	// Add source folder to -i imports or it won't compile anything related to
 	// any scripts in the same folder
 	newProject.addSourceToImports()
-	newProject.resolveSpecialPaths(config)
+	newProject.resolveSpecialPaths(*config)
 
 	// Turn all paths to absolute paths
 	err = newProject.absPaths()
@@ -74,10 +74,10 @@ func UnmarshalFile(inputFileName string, config *config.Configuration) (*Project
 
 // resolveSpecialPaths resolves all special paths
 // (right now, only $base_game in Imports)
-func (p *Project) resolveSpecialPaths(config *config.Configuration) {
+func (p *Project) resolveSpecialPaths(config config.Configuration) {
 	for i, path := range p.Imports {
 		if path == "$base_game" {
-			p.Imports[i] = filepath.Join("", "Data", "Scripts")
+			p.Imports[i] = filepath.Join(config.GamePath, "Data", "Source", "Scripts")
 		}
 	}
 }
