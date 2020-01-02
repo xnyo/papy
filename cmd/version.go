@@ -14,6 +14,6 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of papy",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("papy v0.1")
+		fmt.Println("papy v0.2")
 	},
 }
