@@ -59,7 +59,7 @@ var incrementalCmd = &cobra.Command{
 		VerbosePrintf("Using %d workers\n", workers)
 
 		// Spawn workers
-		files := make(chan string, workers)
+		files := make(chan *papyrus.SourceScript, workers)
 		results := make(chan *papyrus.CompilerResult, workers)
 		outputDone := make(chan struct{})
 		var wg sync.WaitGroup
@@ -88,7 +88,8 @@ var incrementalCmd = &cobra.Command{
 
 		// Send all files to workers
 		for _, file := range *r {
-			files <- file
+			file := file
+			files <- &file
 		}
 		close(files)
 

@@ -13,9 +13,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// SourceScript represents a script that needs to be compiled
+type SourceScript struct {
+	SourcePath        string
+	DestinationFolder string
+}
+
 // CompilerResult represents the result of a papyrus script compilation
 type CompilerResult struct {
-	SourceScript string
+	SourceScript *SourceScript
 	Command      string
 	Output       string
 	Err          error
@@ -33,8 +39,8 @@ func (a arg) String() string {
 
 // Project represents a papy yaml project file
 type Project struct {
-	// OutputFolder is the path to the output folder
-	OutputFolder string `yaml:"output_folder"`
+	// OutputFolders is the path to the output folder
+	OutputFolders []string `yaml:"output_folders"`
 
 	// Optimize is true if we want to optimize our scripts with the -o flag
 	Optimize bool
@@ -98,11 +104,13 @@ func (p *Project) absPaths() error {
 		}
 		p.Imports[i] = v
 	}
-	v, err := filepath.Abs(p.OutputFolder)
-	if err != nil {
-		return err
+	for i := 0; i < len(p.OutputFolders); i++ {
+		v, err := filepath.Abs(p.OutputFolders[i])
+		if err != nil {
+			return err
+		}
+		p.OutputFolders[i] = v
 	}
-	p.OutputFolder = v
 	return nil
 }
 
@@ -126,13 +134,15 @@ func (p *Project) CheckFolders() error {
 	for _, folder := range p.Imports {
 		checkFolder(folder)
 	}
-	checkFolder(p.OutputFolder)
+	for _, folder := range p.OutputFolders {
+		checkFolder(folder)
+	}
 	return nil
 }
 
 // GetScriptsToCompile returns all scripts that need to be compiled
-func (p *Project) GetScriptsToCompile() (*[]string, error) {
-	var sourceFiles []string
+func (p *Project) GetScriptsToCompile() (*[]SourceScript, error) {
+	var sourceFiles []SourceScript
 	for _, inputFolder := range p.Folders {
 		r, err := p.walkSourceDir(inputFolder)
 		if err != nil {
@@ -146,13 +156,13 @@ func (p *Project) GetScriptsToCompile() (*[]string, error) {
 // CompileWorker starts a papyrus compiler to compile
 // scripts received from the "c" channel.
 // It reports results in the "results" channel.
-func (p *Project) CompileWorker(config config.Configuration, wg *sync.WaitGroup, c <-chan string, results chan<- *CompilerResult) {
+func (p *Project) CompileWorker(config config.Configuration, wg *sync.WaitGroup, c <-chan *SourceScript, results chan<- *CompilerResult) {
 	defer wg.Done()
 	for sourceFile := range c {
-		fmt.Printf("Compiling %s\n", sourceFile)
+		fmt.Printf("Compiling %s -> %s\n", filepath.Base(sourceFile.SourcePath), sourceFile.DestinationFolder)
 		args := []string{
-			sourceFile,
-			arg{"o", p.OutputFolder}.String(),
+			sourceFile.SourcePath,
+			arg{"o", sourceFile.DestinationFolder}.String(),
 			arg{"i", strings.Join(p.Imports, ";")}.String(),
 			arg{
 				"f",
@@ -173,14 +183,16 @@ func (p *Project) CompileWorker(config config.Configuration, wg *sync.WaitGroup,
 	}
 }
 
-func (p *Project) walkSourceDir(dir string) (*[]string, error) {
-	var result []string
+func (p *Project) walkSourceDir(dir string) (*[]SourceScript, error) {
+	var result []SourceScript
 	entries, err := dirents(dir)
 	if err != nil {
 		return nil, err
 	}
 	for _, pscInfo := range entries {
 		pscFileName := pscInfo.Name()
+		var foundPexDir string
+		var foundPexInfo os.FileInfo
 		if pscInfo.IsDir() {
 			// Folder, walk recursively
 			// Skyrim has all scripts in one folder, so no.
@@ -194,23 +206,37 @@ func (p *Project) walkSourceDir(dir string) (*[]string, error) {
 		} else if filepath.Ext(pscFileName) == ".psc" {
 			// .psc file, check if we should rebuild this
 			pexFileName := pscFileName[:len(pscFileName)-4] + ".pex"
-			pexPath := filepath.Join(p.OutputFolder, pexFileName)
-			pexInfo, err := os.Stat(pexPath)
-			// pscRelativePath := filepath.Join(dir, pscInfo.Name())
-			if err != nil {
-				if os.IsNotExist(err) {
-					// .pex does not exist, it needs to be built!
-					result = append(result, pscInfo.Name())
-					continue
+			for _, of := range p.OutputFolders {
+				pexPath := filepath.Join(of, pexFileName)
+				pexInfo, err := os.Stat(pexPath)
+				if err != nil && !os.IsNotExist(err) {
+					return nil, fmt.Errorf("cannot stat file %s: %v", pexPath, err)
+				} else if pexInfo != nil {
+					if pexInfo.IsDir() {
+						return nil, fmt.Errorf("%s is dir, expected filr", pexPath)
+					} else {
+						foundPexDir = pexPath
+						foundPexInfo = pexInfo
+						break
+					}
 				}
-				return nil, fmt.Errorf("cannot stat file %s: %v", pexPath, err)
 			}
-			if pexInfo.IsDir() {
-				return nil, fmt.Errorf("%s is dir, expected filr", pexPath)
+
+			if foundPexInfo == nil {
+				// .pex does not exist in any folders, it needs to be built!
+				// send it to the primary folder
+				result = append(result, SourceScript{
+					filepath.Join(dir, pscFileName),
+					p.OutputFolders[0],
+				})
+				continue
 			}
-			if pscInfo.ModTime().After(pexInfo.ModTime()) {
+			if pscInfo.ModTime().After(foundPexInfo.ModTime()) {
 				// File modified, it needs to be rebuilt!
-				result = append(result, pscInfo.Name())
+				result = append(result, SourceScript{
+					filepath.Join(dir, pscFileName),
+					filepath.Dir(foundPexDir),
+				})
 			}
 		}
 	}

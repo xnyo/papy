@@ -58,6 +58,16 @@ func walkWorker(folder string, ext string, remove chan<- string) error {
 	return nil
 }
 
+func merge(ms ...*map[string]struct{}) *map[string]struct{} {
+	res := &map[string]struct{}{}
+	for _, m := range ms {
+		for k := range *m {
+			(*res)[k] = struct{}{}
+		}
+	}
+	return res
+}
+
 var unboundCmd = &cobra.Command{
 	Use:   "unbound",
 	Short: "Prints all pex files with no corresponding psc",
@@ -71,9 +81,16 @@ var unboundCmd = &cobra.Command{
 		if err != nil {
 			Fatal(err)
 		}
-		pexSet, err := buildDirSet(p.OutputFolder, ".pex")
-		if err != nil {
-			Fatal(err)
+		if len(p.OutputFolders) == 0 {
+			Fatal(fmt.Errorf("no output folders present in the yaml file"))
+		}
+		pexSet := &map[string]struct{}{}
+		for _, folder := range p.OutputFolders {
+			s, err := buildDirSet(folder, ".pex")
+			if err != nil {
+				Fatal(err)
+			}
+			pexSet = merge(pexSet, s)
 		}
 		var wg sync.WaitGroup
 		workers := len(p.Folders)
