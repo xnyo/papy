@@ -26,7 +26,8 @@ papy setup
 Put a file called `papy.yaml` in your project root (usually `ModOrganizer\mods\yourmod`), and populate it:
 
 ```yaml
-output_folder: scripts
+output_folders:
+  - scripts
 optimize: false
 imports:
   - $base_game
